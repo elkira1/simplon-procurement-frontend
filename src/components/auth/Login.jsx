@@ -13,16 +13,64 @@ import {
 import { toast } from "react-toastify";
 
 const Login = () => {
-  const { login, isAuthenticated, loading: authLoading, error: authError, clearError } = useAuth();
+  const {
+    login,
+    isAuthenticated,
+    loading: authLoading,
+    error: authError,
+    clearError,
+  } = useAuth();
   const [formData, setFormData] = useState({ login: "", password: "" });
+  const [touched, setTouched] = useState({ login: false, password: false });
+  const [fieldErrors, setFieldErrors] = useState({ login: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
   const [loginError, setLoginError] = useState(null);
   const navigate = useNavigate();
 
   const location = useLocation();
-  const from = location.state?.from?.pathname || "/dashboard";
+  const from = location.state?.from?.pathname || "/";
   const successMessage = location.state?.message;
+
+  const validators = {
+    login: (value) => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return "Identifiant obligatoire";
+      }
+      if (trimmed.length < 3) {
+        return "Minimum 3 caractères";
+      }
+      return "";
+    },
+    password: (value) => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return "Mot de passe obligatoire";
+      }
+      if (trimmed.length < 6) {
+        return "Minimum 6 caractères";
+      }
+      return "";
+    },
+  };
+
+  const runFieldValidation = (name, value) => {
+    const validator = validators[name];
+    if (!validator) return "";
+    const message = validator(value ?? "");
+    setFieldErrors((prev) => ({ ...prev, [name]: message }));
+    return message;
+  };
+
+  const validateForm = () => {
+    const results = Object.keys(validators).reduce((acc, key) => {
+      acc[key] = validators[key](formData[key]);
+      return acc;
+    }, {});
+    setFieldErrors(results);
+    return Object.values(results).every((msg) => !msg);
+  };
 
   // Nettoyer les erreurs quand les champs changent
   useEffect(() => {
@@ -30,11 +78,10 @@ const Login = () => {
       setLoginError(null);
       clearError();
     }
-  }, [formData.login, formData.password]);
+  }, [formData.login, formData.password, authError, clearError, loginError]);
 
   // Redirection si déjà authentifié
   if (isAuthenticated && !authLoading && !isLogging) {
-    console.log("✅ Déjà authentifié, redirection vers:", from);
     return <Navigate to={from} replace />;
   }
 
@@ -51,15 +98,25 @@ const Login = () => {
   }
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (touched[name]) {
+      runFieldValidation(name, value);
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name } = e.target;
+    setTouched((prev) => ({ ...prev, [name]: true }));
+    runFieldValidation(name, formData[name]);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation basique
-    if (!formData.login.trim() || !formData.password.trim()) {
-      setLoginError("Veuillez remplir tous les champs");
+
+    if (!validateForm()) {
+      setTouched({ login: true, password: true });
+      setLoginError("Veuillez corriger les champs surlignés");
       return;
     }
 
@@ -68,11 +125,9 @@ const Login = () => {
     clearError();
 
     try {
-      console.log('🎯 Début du processus de connexion...');
       const result = await login(formData);
       
       if (result.success) {
-        console.log('✅ Connexion réussie dans le composant');
         toast.success(result.message || "Connexion réussie !");
         
         // Redirection après un court délai pour le feedback visuel
@@ -81,19 +136,24 @@ const Login = () => {
           navigate(from, { replace: true });
         }, 500);
       } else {
-        console.error('❌ Échec connexion dans le composant:', result.error);
+        console.error("Échec connexion:", result.error);
         setLoginError(result.error);
         toast.error(result.error || "Erreur de connexion");
         setIsLogging(false);
       }
     } catch (err) {
-      console.error("💥 Erreur inattendue dans handleSubmit:", err);
+      console.error("Erreur inattendue dans handleSubmit:", err);
       const errorMsg = "Une erreur inattendue est survenue lors de la connexion";
       setLoginError(errorMsg);
       toast.error(errorMsg);
       setIsLogging(false);
     }
   };
+
+  const isFormValid =
+    Object.values(fieldErrors).every((msg) => !msg) &&
+    formData.login.trim() !== "" &&
+    formData.password.trim() !== "";
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -135,11 +195,23 @@ const Login = () => {
                   required
                   value={formData.login}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   disabled={isLogging}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+                  aria-invalid={Boolean(fieldErrors.login)}
+                  aria-describedby="login-helper"
+                  className={`w-full pl-10 pr-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 text-sm bg-white disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                    fieldErrors.login
+                      ? "border-red-400 focus:ring-red-200 focus:border-red-400"
+                      : "border-gray-300 focus:ring-gray-400 focus:border-gray-400"
+                  }`}
                   placeholder="Nom d'utilisateur ou email"
                 />
               </div>
+              {fieldErrors.login && touched.login && (
+                <p id="login-helper" className="text-xs text-red-600 mt-1">
+                  {fieldErrors.login}
+                </p>
+              )}
             </div>
 
             {/* Champ Mot de passe */}
@@ -167,8 +239,15 @@ const Login = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
+                  onBlur={handleBlur}
                   disabled={isLogging}
-                  className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 bg-white disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
+                  aria-invalid={Boolean(fieldErrors.password)}
+                  aria-describedby="password-helper"
+                  className={`w-full pl-10 pr-10 py-2.5 border rounded-md focus:outline-none focus:ring-2 text-sm bg-white disabled:bg-gray-100 disabled:cursor-not-allowed ${
+                    fieldErrors.password
+                      ? "border-red-400 focus:ring-red-200 focus:border-red-400"
+                      : "border-gray-300 focus:ring-gray-400 focus:border-gray-400"
+                  }`}
                   placeholder="Votre mot de passe"
                 />
                 <button
@@ -184,6 +263,11 @@ const Login = () => {
                   )}
                 </button>
               </div>
+              {fieldErrors.password && touched.password && (
+                <p id="password-helper" className="text-xs text-red-600 mt-1">
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
 
             {/* Erreurs */}
@@ -197,7 +281,7 @@ const Login = () => {
             {/* Bouton de connexion */}
             <button
               type="submit"
-              disabled={isLogging}
+              disabled={isLogging || !isFormValid}
               className="w-full py-2.5 px-4 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
             >
               {isLogging ? (

@@ -4,21 +4,15 @@ import { requestsAPI } from "../../services/api";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   FileText,
-  Clock,
-  CheckCircle,
-  XCircle,
   Eye,
   Search,
-  Calendar,
   User,
-  Wallet2,
-  RefreshCw,
   ChevronUp,
   ChevronDown,
   Filter,
-  Download,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { getRequestStatusConfig } from "../../utils/requestStatus";
 
 const RequestsList = () => {
   const { user } = useAuth();
@@ -31,169 +25,125 @@ const RequestsList = () => {
   });
   const [filters, setFilters] = useState({
     status: searchParams.get("filter") || "",
-    search: "",
-    dateFrom: "",
-    dateTo: "",
+    search: searchParams.get("q") || "",
+    dateFrom: searchParams.get("from") || "",
+    dateTo: searchParams.get("to") || "",
+    urgency: searchParams.get("urgency") || "",
+  });
+  const [pagination, setPagination] = useState({
+    page: Number(searchParams.get("page") || 1),
+    pageSize: 20,
+    count: 0,
   });
 
   // Utiliser useCallback pour éviter les re-rendus inutiles
   const handleFilterChange = useCallback((key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
+    setPagination((prev) => ({ ...prev, page: 1 }));
   }, []);
 
   // Debounce pour la recherche
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(filters.search);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setFilters((prev) => ({ ...prev, search: searchTerm }));
+      setPagination((prev) => ({ ...prev, page: 1 }));
     }, 300);
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => {
-    fetchRequests();
-  }, [filters.status, filters.search]);
-
-  // Fonction pour déterminer si une demande est "en cours"
-  const isInProgress = (status) => {
-    const inProgressStatuses = [
-      "mg_approved",
-      "mg_validated",
-      "accounting_reviewed",
-    ];
-    return inProgressStatuses.includes(status);
-  };
-
-  // Fonction pour déterminer si l'utilisateur courant peut voir cette demande
-  const canUserSeeRequest = (request) => {
-    const { role, id } = user;
-
-    switch (role) {
-      case "employee":
-        return request.user_id === id || request.created_by === id;
-      case "mg":
-        return true;
-      case "accounting":
-        return (
-          request.status === "mg_approved" ||
-          request.status === "mg_validated" ||
-          request.accounting_validated_by === id ||
-          (request.rejected_by_role === "accounting" &&
-            request.rejected_by === id) ||
-          request.status === "accounting_reviewed"
-        );
-      case "director":
-        return (
-          request.status === "accounting_reviewed" ||
-          request.approved_by === id ||
-          (request.rejected_by_role === "director" &&
-            request.rejected_by === id) ||
-          request.status === "director_approved"
-        );
-      default:
-        return false;
+  const orderingParam = React.useMemo(() => {
+    if (sortConfig.key === "estimated_cost") {
+      return sortConfig.direction === "asc"
+        ? "estimated_cost"
+        : "-estimated_cost";
     }
-  };
+    return sortConfig.direction === "asc" ? "created_at" : "-created_at";
+  }, [sortConfig]);
 
-  const fetchRequests = async () => {
-    try {
-      setLoading(true);
-      const response = await requestsAPI.getRequests();
-      let filteredRequests = response.data.results || response.data;
-
-      // Filtrage selon le rôle
-      filteredRequests = filteredRequests.filter(canUserSeeRequest);
-
-      // Filtrage par statut
-      if (filters.status) {
-        if (filters.status === "in_progress") {
-          filteredRequests = filteredRequests.filter((req) =>
-            isInProgress(req.status)
-          );
-        } else {
-          if (filters.status === "mg_approved") {
-            filteredRequests = filteredRequests.filter(
-              (req) =>
-                req.status === "mg_validated" || req.status === "mg_approved"
-            );
-          } else {
-            filteredRequests = filteredRequests.filter(
-              (req) => req.status === filters.status
-            );
-          }
-        }
-      }
-
-      // Filtrage par recherche
-      if (filters.search) {
-        filteredRequests = filteredRequests.filter((req) => {
-          const searchLower = filters.search.toLowerCase();
-          return (
-            req.item_description?.toLowerCase().includes(searchLower) ||
-            req.user_name?.toLowerCase().includes(searchLower) ||
-            req.justification?.toLowerCase().includes(searchLower)
-          );
+  const fetchRequests = useCallback(
+    async (pageToLoad) => {
+      try {
+        setLoading(true);
+        const response = await requestsAPI.getRequests({
+          page: pageToLoad,
+          pageSize: pagination.pageSize,
+          status: filters.status,
+          search: filters.search,
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
+          urgency: filters.urgency,
+          ordering: orderingParam,
         });
+        const payload = response.data;
+        const results = payload.results || payload;
+        setRequests(results);
+        setPagination((prev) => ({
+          ...prev,
+          page: pageToLoad,
+          count: payload.count ?? results.length,
+        }));
+      } catch (error) {
+        toast.error("Erreur lors du chargement des demandes");
+      } finally {
+        setLoading(false);
       }
+    },
+    [
+      filters.status,
+      filters.search,
+      filters.dateFrom,
+      filters.dateTo,
+      filters.urgency,
+      orderingParam,
+      pagination.pageSize,
+    ]
+  );
 
-      setRequests(filteredRequests);
-    } catch (error) {
-      toast.error("Erreur lors du chargement des demandes");
-      // console.error("Requests error:", error);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    fetchRequests(pagination.page);
+  }, [fetchRequests, pagination.page]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.status) params.set("filter", filters.status);
+    if (filters.search) params.set("q", filters.search);
+    if (filters.dateFrom) params.set("from", filters.dateFrom);
+    if (filters.dateTo) params.set("to", filters.dateTo);
+    if (filters.urgency) params.set("urgency", filters.urgency);
+    if (pagination.page > 1) {
+      params.set("page", pagination.page.toString());
     }
+    setSearchParams(params, { replace: true });
+  }, [
+    filters.status,
+    filters.search,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.urgency,
+    pagination.page,
+    setSearchParams,
+  ]);
+
+  const resetFilters = () => {
+    setFilters({
+      status: "",
+      search: "",
+      dateFrom: "",
+      dateTo: "",
+      urgency: "",
+    });
+    setSearchTerm("");
+    setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
-  const getStatusConfig = (status) => {
-    const configs = {
-      pending: {
-        icon: Clock,
-        class: "bg-amber-100 text-amber-800",
-        text: "En attente",
-        dotClass: "bg-amber-400",
-      },
-      mg_approved: {
-        icon: RefreshCw,
-        class: "bg-blue-100 text-blue-800",
-        text: "Validée MG",
-        dotClass: "bg-blue-400",
-      },
-      mg_validated: {
-        icon: RefreshCw,
-        class: "bg-blue-100 text-blue-800",
-        text: "Validée MG",
-        dotClass: "bg-blue-400",
-      },
-      accounting_reviewed: {
-        icon: RefreshCw,
-        class: "bg-purple-100 text-purple-800 text-center",
-        text: "Revue Comptabilité",
-        dotClass: "bg-purple-400",
-      },
-      director_approved: {
-        icon: CheckCircle,
-        class: "bg-emerald-100 text-emerald-800",
-        text: "Approuvée",
-        dotClass: "bg-emerald-400",
-      },
-      rejected: {
-        icon: XCircle,
-        class: "bg-red-100 text-red-800",
-        text: "Refusée",
-        dotClass: "bg-red-400",
-      },
-    };
-    return (
-      configs[status] || {
-        icon: Clock,
-        class: "bg-gray-100 text-gray-800",
-        text: status,
-        dotClass: "bg-gray-400",
-      }
-    );
+  const goToPage = (pageNumber) => {
+    setPagination((prev) => ({
+      ...prev,
+      page: Math.min(Math.max(1, pageNumber), totalPages || 1),
+    }));
   };
 
   const canValidate = (request) => {
@@ -214,42 +164,16 @@ const RequestsList = () => {
       direction = "desc";
     }
     setSortConfig({ key, direction });
+    setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
-  const sortedRequests = React.useMemo(() => {
-    let sortableRequests = [...requests];
-    if (sortConfig.key) {
-      sortableRequests.sort((a, b) => {
-        if (sortConfig.key === "estimated_cost") {
-          const aValue = a[sortConfig.key] || 0;
-          const bValue = b[sortConfig.key] || 0;
-          return sortConfig.direction === "asc"
-            ? aValue - bValue
-            : bValue - aValue;
-        }
-
-        if (sortConfig.key === "created_at") {
-          const aValue = new Date(a[sortConfig.key]);
-          const bValue = new Date(b[sortConfig.key]);
-          return sortConfig.direction === "asc"
-            ? aValue - bValue
-            : bValue - aValue;
-        }
-
-        const aValue = a[sortConfig.key] || "";
-        const bValue = b[sortConfig.key] || "";
-
-        if (aValue < bValue) {
-          return sortConfig.direction === "asc" ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === "asc" ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sortableRequests;
-  }, [requests, sortConfig]);
+  const displayedRequests = requests;
+  const totalPages = Math.max(
+    1,
+    Math.ceil((pagination.count || 0) / pagination.pageSize) || 1
+  );
+  const canGoPrev = pagination.page > 1;
+  const canGoNext = pagination.page < totalPages;
 
   const SortableHeader = ({ column, children, className = "" }) => (
     <th
@@ -280,7 +204,7 @@ const RequestsList = () => {
 
   // Composant pour l'affichage mobile en cartes
   const MobileRequestCard = ({ request }) => {
-    const statusConfig = getStatusConfig(request.status);
+    const statusConfig = getRequestStatusConfig(request.status);
     const StatusIcon = statusConfig.icon;
     const needsValidation = canValidate(request);
 
@@ -354,13 +278,13 @@ const RequestsList = () => {
               <div className="text-xs text-gray-500 mb-1">Statut</div>
               <div className="flex items-center space-x-2">
                 <div
-                  className={`w-2 h-2 rounded-full ${statusConfig.dotClass}`}
+                  className={`w-2 h-2 rounded-full ${statusConfig.dotClassName}`}
                 ></div>
                 <span
-                  className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.class}`}
+                  className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.className}`}
                 >
                   <StatusIcon className="w-3 h-3 mr-1" />
-                  {statusConfig.text}
+                  {statusConfig.label}
                 </span>
               </div>
             </div>
@@ -400,8 +324,8 @@ const RequestsList = () => {
               : "Gestion des demandes"}
           </h1>
           <p className="text-gray-500 mt-1 text-sm">
-            {sortedRequests.length} demande
-            {sortedRequests.length !== 1 ? "s" : ""} au total
+            {pagination.count} demande
+            {pagination.count !== 1 ? "s" : ""} au total
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex items-center space-x-3">
@@ -419,44 +343,96 @@ const RequestsList = () => {
       </div>
 
       {/* Filtres et actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
-        <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
-          <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
-            {/* Recherche */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Rechercher..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full sm:w-64 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Filtre statut */}
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <select
-                value={filters.status}
-                onChange={(e) => handleFilterChange("status", e.target.value)}
-                className="pl-10 pr-8 py-2 w-full sm:w-auto border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent appearance-none bg-white"
-              >
-                <option value="">Tous les statuts</option>
-                {(user?.role === "employee" || user?.role === "mg") && (
-                  <option value="pending">En attente</option>
-                )}
-                <option value="in_progress">En cours</option>
-                <option value="director_approved">Approuvée</option>
-                <option value="rejected">Refusée</option>
-              </select>
-            </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6 space-y-4">
+        <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4">
+          {/* Recherche */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+            />
           </div>
+
+          {/* Filtre statut */}
+          <div className="relative w-full sm:w-56">
+            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <select
+              value={filters.status}
+              onChange={(e) => handleFilterChange("status", e.target.value)}
+              className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent appearance-none bg-white"
+            >
+              <option value="">Tous les statuts</option>
+              {(user?.role === "employee" || user?.role === "mg") && (
+                <option value="pending">En attente</option>
+              )}
+              <option value="in_progress">En cours</option>
+              <option value="director_approved">Approuvée</option>
+              <option value="rejected">Refusée</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Du
+            </label>
+            <input
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
+              className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Au
+            </label>
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => handleFilterChange("dateTo", e.target.value)}
+              className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Urgence
+            </label>
+            <select
+              value={filters.urgency}
+              onChange={(e) => handleFilterChange("urgency", e.target.value)}
+              className="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-white"
+            >
+              <option value="">Toutes</option>
+              <option value="low">Faible</option>
+              <option value="medium">Moyenne</option>
+              <option value="high">Élevée</option>
+              <option value="critical">Critique</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+          <p className="text-xs text-gray-500">
+            {displayedRequests.length} élément
+            {displayedRequests.length > 1 ? "s" : ""} sur {pagination.count}
+          </p>
+          <button
+            onClick={resetFilters}
+            className="text-xs font-medium text-gray-600 hover:text-red-600 transition-colors"
+          >
+            Réinitialiser les filtres
+          </button>
         </div>
       </div>
 
       {/* Contenu principal */}
-      {sortedRequests.length === 0 ? (
+      {displayedRequests.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="text-center py-16">
             <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -499,8 +475,8 @@ const RequestsList = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {sortedRequests.map((request, index) => {
-                    const statusConfig = getStatusConfig(request.status);
+                  {displayedRequests.map((request, index) => {
+                    const statusConfig = getRequestStatusConfig(request.status);
                     const StatusIcon = statusConfig.icon;
                     const needsValidation = canValidate(request);
 
@@ -579,14 +555,14 @@ const RequestsList = () => {
                         {/* Statut */}
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-2">
-                            <div
-                              className={`w-2 h-2 rounded-full ${statusConfig.dotClass}`}
-                            ></div>
-                            <span
-                              className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig.class}`}
-                            >
-                              <StatusIcon className="w-3 h-3 mr-1" />
-                              {statusConfig.text}
+                        <div
+                          className={`w-2 h-2 rounded-full ${statusConfig.dotClassName}`}
+                        ></div>
+                        <span
+                          className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig.className}`}
+                        >
+                          <StatusIcon className="w-3 h-3 mr-1" />
+                          {statusConfig.label}
                             </span>
                           </div>
                         </td>
@@ -618,9 +594,31 @@ const RequestsList = () => {
 
           {/* Affichage mobile/tablette - cartes */}
           <div className="lg:hidden space-y-4">
-            {sortedRequests.map((request) => (
+            {displayedRequests.map((request) => (
               <MobileRequestCard key={request.id} request={request} />
             ))}
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl mt-4 p-4 flex flex-col md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-gray-500">
+              Page {pagination.page} / {totalPages}
+            </p>
+            <div className="flex items-center space-x-2 mt-3 md:mt-0">
+              <button
+                onClick={() => goToPage(pagination.page - 1)}
+                disabled={!canGoPrev}
+                className="px-3 py-1.5 text-sm border rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Précédent
+              </button>
+              <button
+                onClick={() => goToPage(pagination.page + 1)}
+                disabled={!canGoNext}
+                className="px-3 py-1.5 text-sm border rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Suivant
+              </button>
+            </div>
           </div>
         </>
       )}

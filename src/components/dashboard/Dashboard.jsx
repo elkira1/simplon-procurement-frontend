@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { dashboardAPI } from "../../services/api";
 import {
@@ -6,14 +7,107 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  AlertTriangle,
-  Calendar,
   RefreshCw,
-  User,
-  Eye,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpRight,
+  ArrowRight,
+  Copy,
 } from "lucide-react";
 import { toast } from "react-toastify";
-import { Link } from "react-router-dom";
+
+const StatCard = ({ icon: Icon, name, value, description, accent }) => (
+  <div className="rounded-2xl border border-gray-100 bg-white/90 shadow-sm hover:shadow-md transition-shadow duration-200">
+    <div className="p-5 flex items-center gap-4">
+      <div
+        className={`h-12 w-12 rounded-xl flex items-center justify-center text-white ${accent}`}
+      >
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="truncate">
+        <p className="text-sm text-gray-500">{name}</p>
+        <p className="text-2xl font-semibold text-gray-900">{value}</p>
+        <p className="text-xs text-gray-400">{description}</p>
+      </div>
+    </div>
+  </div>
+);
+
+const SectionCard = ({ title, description, children, action }) => (
+  <div className="rounded-3xl border border-gray-100 bg-white shadow-sm">
+    <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        {description && <p className="text-sm text-gray-500">{description}</p>}
+      </div>
+      {action}
+    </div>
+    <div className="p-6">{children}</div>
+  </div>
+);
+
+const AlertItem = ({ alert, badge }) => {
+  const handleCopy = () => {
+    if (!alert.item_description) return;
+    navigator.clipboard?.writeText(alert.item_description);
+    toast.success("Description copiée dans le presse-papiers");
+  };
+
+  return (
+    <div className="py-4 border-b last:border-b-0 space-y-2">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-medium text-gray-900">{alert.item_description ? "Description" : "Demande"}</p>
+          <p className="text-xs text-gray-500">
+            {alert.user_name || "Utilisateur"} · {alert.urgency_display}
+          </p>
+          <p className="text-xs text-gray-400">
+            En attente depuis {alert.daysWaiting} jour
+            {alert.daysWaiting > 1 ? "s" : ""}
+          </p>
+        </div>
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.class}`}
+        >
+          {badge.text}
+        </span>
+      </div>
+
+      {alert.item_description && (
+        <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2 text-sm text-gray-700 break-words">
+          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+            <span>Contenu de la demande</span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
+            >
+              <Copy className="h-3 w-3" />
+              Copier
+            </button>
+          </div>
+          <pre className="whitespace-pre-wrap break-words text-gray-800 text-sm font-medium">
+            {alert.item_description}
+          </pre>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+        <div className="text-gray-500">
+          Dernière mise à jour :{" "}
+          {new Date(alert.created_at).toLocaleDateString("fr-FR")}
+        </div>
+        <Link
+          to={`/requests/${alert.id}`}
+          className="text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-1"
+        >
+          Voir la demande
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -21,31 +115,195 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const response = await dashboardAPI.getDashboard();
+        setDashboardData(response.data);
+      } catch (error) {
+        toast.error("Erreur lors du chargement du dashboard");
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
-    try {
-      const response = await dashboardAPI.getDashboard();
-      console.log("Dashboard response:", response.data);
-      setDashboardData(response.data);
-    } catch (error) {
-      toast.error("Erreur lors du chargement du dashboard");
-      // console.error("Dashboard error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const formatCurrency = (value = 0) =>
+    new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
+      maximumFractionDigits: 0,
+    }).format(value || 0);
 
-  const getRoleTitle = (role) => {
-    const titles = {
-      employee: "Tableau de bord - Employé",
-      mg: "Tableau de bord - Moyens Généraux",
-      accounting: "Tableau de bord - Comptabilité",
-      director: "Tableau de bord - Direction",
+  const statCards = useMemo(() => {
+    if (!dashboardData) return [];
+    const base = {
+      employee: [
+        {
+          name: "Mes demandes",
+          value: dashboardData?.total_requests || 0,
+          icon: FileText,
+          color: "bg-blue-500",
+          description: "Total de mes demandes",
+        },
+        {
+          name: "En attente",
+          value: dashboardData?.pending_requests || 0,
+          icon: Clock,
+          color: "bg-yellow-500",
+          description: "En attente de validation MG",
+        },
+        {
+          name: "En cours",
+          value: dashboardData?.in_progress_requests || 0,
+          icon: RefreshCw,
+          color: "bg-orange-500",
+          description: "En cours de traitement",
+        },
+        {
+          name: "Approuvées",
+          value: dashboardData?.approved_requests || 0,
+          icon: CheckCircle,
+          color: "bg-green-500",
+          description: "Demandes validées",
+        },
+        {
+          name: "Refusées",
+          value: dashboardData?.rejected_requests || 0,
+          icon: XCircle,
+          color: "bg-red-500",
+          description: "Demandes rejetées",
+        },
+      ],
+      mg: [
+        {
+          name: "Demandes reçues",
+          value: dashboardData?.mes_demandes || 0,
+          icon: FileText,
+          color: "bg-sky-500",
+          description: "Arrivées à mon niveau",
+        },
+        {
+          name: "À traiter",
+          value: dashboardData?.en_cours || 0,
+          icon: RefreshCw,
+          color: "bg-orange-500",
+          description: "En attente d'action",
+        },
+        {
+          name: "Validées",
+          value: dashboardData?.acceptees || 0,
+          icon: CheckCircle,
+          color: "bg-emerald-500",
+          description: "Validées par moi",
+        },
+        {
+          name: "Refusées",
+          value: dashboardData?.refusees || 0,
+          icon: XCircle,
+          color: "bg-rose-500",
+          description: "Refusées par moi",
+        },
+      ],
     };
-    return titles[role] || "Tableau de bord";
-  };
+    return (
+      base[user?.role] ||
+      base.employee.slice(0, 4) ||
+      [
+        {
+          name: "Demandes",
+          value: dashboardData?.total_requests || 0,
+          icon: FileText,
+          color: "bg-blue-500",
+          description: "Toutes les demandes",
+        },
+      ]
+    );
+  }, [dashboardData, user?.role]);
+
+  const allRequests = dashboardData?.all_requests || [];
+  const criticalAlerts = useMemo(
+    () =>
+      allRequests.filter(
+        (req) =>
+          req.urgency === "critical" && req.status !== "director_approved"
+      ),
+    [allRequests]
+  );
+  const overdueAlerts = useMemo(() => {
+    const now = Date.now();
+    return allRequests.filter((req) => {
+      if (req.status === "director_approved") return false;
+      const createdAt = new Date(req.created_at).getTime();
+      const diffDays = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+      return diffDays >= 7;
+    });
+  }, [allRequests]);
+
+  const highlightedAlerts = useMemo(() => {
+    const now = Date.now();
+    const map = new Map();
+    [...criticalAlerts, ...overdueAlerts].forEach((req) => {
+      if (map.has(req.id)) return;
+      const createdAt = new Date(req.created_at).getTime();
+      const diffDays = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+      map.set(req.id, { ...req, daysWaiting: diffDays });
+    });
+    return Array.from(map.values())
+      .sort((a, b) => b.daysWaiting - a.daysWaiting)
+      .slice(0, 4);
+  }, [criticalAlerts, overdueAlerts]);
+
+  const currentBudget =
+    dashboardData?.current_period_stats?.total_amount || 0;
+  const previousBudget =
+    dashboardData?.previous_period_stats?.total_amount || 0;
+  const budgetVariation = previousBudget
+    ? ((currentBudget - previousBudget) / previousBudget) * 100
+    : currentBudget > 0
+    ? 100
+    : 0;
+  const budgetTrend = budgetVariation >= 0 ? "up" : "down";
+
+  const quickActions = useMemo(() => {
+    const actionsByRole = {
+      employee: [
+        {
+          title: "Nouvelle demande",
+          description: "Soumettre un besoin",
+          to: "/requests/create",
+          accent: "bg-blue-50 text-blue-600",
+        },
+        {
+          title: "Mes demandes",
+          description: "Suivi de l'avancement",
+          to: "/requests",
+          accent: "bg-green-50 text-green-600",
+        },
+      ],
+      mg: [
+        {
+          title: "Validations",
+          description: "Traiter les demandes reçues",
+          to: "/validations",
+          accent: "bg-orange-50 text-orange-600",
+        },
+        {
+          title: "Toutes les demandes",
+          description: "Vue d'ensemble",
+          to: "/requests",
+          accent: "bg-indigo-50 text-indigo-600",
+        },
+        {
+          title: "Créer une demande",
+          description: "Besoin urgent / personnel",
+          to: "/requests/create",
+          accent: "bg-blue-50 text-blue-600",
+        },
+      ],
+    };
+    return actionsByRole[user?.role] || actionsByRole.employee;
+  }, [user?.role]);
 
   if (loading) {
     return (
@@ -55,733 +313,207 @@ const Dashboard = () => {
     );
   }
 
-  // Statistiques spécifiques à l'employé (5 KPIs)
-  const getEmployeeStats = () => {
-    if (!dashboardData) return [];
-
-    return [
-      {
-        name: "Mes demandes",
-        value: dashboardData?.total_requests || 0,
-        icon: FileText,
-        color: "blue",
-        description: "Total de mes demandes",
-      },
-      {
-        name: "En attente",
-        value: dashboardData?.pending_requests || 0,
-        icon: Clock,
-        color: "yellow",
-        description: "En attente de validation MG",
-      },
-      {
-        name: "En cours",
-        value: dashboardData?.in_progress_requests || 0,
-        icon: RefreshCw,
-        color: "orange",
-        description: "En cours de traitement",
-      },
-      {
-        name: "Approuvées",
-        value: dashboardData?.approved_requests || 0,
-        icon: CheckCircle,
-        color: "green",
-        description: "Demandes validées",
-      },
-      {
-        name: "Refusées",
-        value: dashboardData?.rejected_requests || 0,
-        icon: XCircle,
-        color: "red",
-        description: "Demandes rejetées",
-      },
-    ];
-  };
-
-  // Stats pour MG (4 KPIs spécifiques - comme comptabilité et direction)
-  const getMGStats = () => {
-    return [
-      {
-        name: "Mes demandes",
-        value: dashboardData?.mes_demandes || 0,
-        icon: FileText,
-        color: "blue",
-        description: "Demandes arrivées à mon niveau",
-      },
-      {
-        name: "En cours",
-        value: dashboardData?.en_cours || 0,
-        icon: RefreshCw,
-        color: "orange",
-        description: "À traiter par moi",
-      },
-      {
-        name: "Acceptées",
-        value: dashboardData?.acceptees || 0,
-        icon: CheckCircle,
-        color: "green",
-        description: "Que j'ai validées",
-      },
-      {
-        name: "Refusées",
-        value: dashboardData?.refusees || 0,
-        icon: XCircle,
-        color: "red",
-        description: "Que j'ai refusées",
-      },
-    ];
-  };
-
-  // Stats pour Comptabilité (4 KPIs - niveau de responsabilité)
-  const getAccountingStats = () => {
-    return [
-      {
-        name: "Mes demandes",
-        value: dashboardData?.mes_demandes || 0,
-        icon: FileText,
-        color: "blue",
-        description: "Demandes arrivées à mon niveau",
-      },
-      {
-        name: "En cours",
-        value: dashboardData?.en_cours || 0,
-        icon: RefreshCw,
-        color: "orange",
-        description: "À valider par moi",
-      },
-      {
-        name: "Acceptées",
-        value: dashboardData?.acceptees || 0,
-        icon: CheckCircle,
-        color: "green",
-        description: "Que j'ai acceptées",
-      },
-      {
-        name: "Refusées",
-        value: dashboardData?.refusees || 0,
-        icon: XCircle,
-        color: "red",
-        description: "Que j'ai refusées",
-      },
-    ];
-  };
-
-  // Stats pour Direction (4 KPIs - niveau de responsabilité)
-  const getDirectorStats = () => {
-    return [
-      {
-        name: "Mes demandes",
-        value: dashboardData?.mes_demandes || 0,
-        icon: FileText,
-        color: "blue",
-        description: "Demandes arrivées à mon niveau",
-      },
-      {
-        name: "En cours",
-        value: dashboardData?.en_cours || 0,
-        icon: RefreshCw,
-        color: "orange",
-        description: "À approuver par moi",
-      },
-      {
-        name: "Acceptées",
-        value: dashboardData?.acceptees || 0,
-        icon: CheckCircle,
-        color: "green",
-        description: "Que j'ai approuvées",
-      },
-      {
-        name: "Refusées",
-        value: dashboardData?.refusees || 0,
-        icon: XCircle,
-        color: "red",
-        description: "Que j'ai refusées",
-      },
-    ];
-  };
-
-  const stats =
-    user?.role === "employee"
-      ? getEmployeeStats()
-      : user?.role === "mg"
-      ? getMGStats()
-      : user?.role === "accounting"
-      ? getAccountingStats()
-      : user?.role === "director"
-      ? getDirectorStats()
-      : [];
-
-  const getColorClasses = (color) => {
-    const colors = {
-      blue: "bg-blue-500 text-white",
-      yellow: "bg-yellow-500 text-white",
-      orange: "bg-orange-500 text-white",
-      green: "bg-green-500 text-white",
-      red: "bg-red-500 text-white",
-    };
-    return colors[color] || "bg-gray-500 text-white";
-  };
-
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      pending: { class: "bg-yellow-100 text-yellow-800", text: "En attente" },
-      mg_approved: { class: "bg-blue-100 text-blue-800", text: "Validée MG" },
-      mg_validated: { class: "bg-blue-100 text-blue-800", text: "Validée MG" },
-      accounting_reviewed: {
-        class: "bg-purple-100 text-purple-800",
-        text: "Validée Compta",
-      },
-      director_approved: {
-        class: "bg-green-100 text-green-800",
-        text: "Approuvée",
-      },
-      rejected: { class: "bg-red-100 text-red-800", text: "Refusée" },
-    };
-    return (
-      statusConfig[status] || {
-        class: "bg-gray-100 text-gray-800",
-        text: status,
-      }
-    );
-  };
-
-  // Actions rapides pour MG
-  const getMGActions = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <Link
-        to="/requests/create"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
-            <FileText className="h-8 w-8 text-blue-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Nouvelle demande</p>
-            <p className="text-sm text-gray-500">Créer une demande</p>
-          </div>
-        </div>
-      </Link>
-
-      <Link
-        to="/validations"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-orange-100 group-hover:bg-orange-200 transition-colors">
-            <CheckCircle className="h-8 w-8 text-orange-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Validations</p>
-            <p className="text-sm text-gray-500">Demandes à valider</p>
-          </div>
-        </div>
-      </Link>
-
-      <Link
-        to="/requests"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-green-100 group-hover:bg-green-200 transition-colors">
-            <Clock className="h-8 w-8 text-green-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Toutes les demandes</p>
-            <p className="text-sm text-gray-500">Gérer les demandes</p>
-          </div>
-        </div>
-      </Link>
-    </div>
-  );
-
-  // Actions rapides pour Comptabilité
-  const getAccountingActions = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Link
-        to="/validations"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-orange-100 group-hover:bg-orange-200 transition-colors">
-            <CheckCircle className="h-8 w-8 text-orange-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Validations</p>
-            <p className="text-sm text-gray-500">Demandes à valider</p>
-          </div>
-        </div>
-      </Link>
-
-      <Link
-        to="/requests"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
-            <FileText className="h-8 w-8 text-blue-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Mes demandes</p>
-            <p className="text-sm text-gray-500">Demandes de mon niveau</p>
-          </div>
-        </div>
-      </Link>
-    </div>
-  );
-
-  // Actions rapides pour Direction
-  const getDirectorActions = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Link
-        to="/validations"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-red-100 group-hover:bg-red-200 transition-colors">
-            <CheckCircle className="h-8 w-8 text-red-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Approbations</p>
-            <p className="text-sm text-gray-500">Demandes à approuver</p>
-          </div>
-        </div>
-      </Link>
-
-      <Link
-        to="/requests"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
-            <FileText className="h-8 w-8 text-blue-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Mes demandes</p>
-            <p className="text-sm text-gray-500">Demandes de mon niveau</p>
-          </div>
-        </div>
-      </Link>
-    </div>
-  );
-
-  // Actions rapides pour Employé
-  const getEmployeeActions = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Link
-        to="/requests/create"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-blue-100 group-hover:bg-blue-200 transition-colors">
-            <FileText className="h-8 w-8 text-blue-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Nouvelle demande</p>
-            <p className="text-sm text-gray-500">Créer une demande</p>
-          </div>
-        </div>
-      </Link>
-
-      <Link
-        to="/requests"
-        className="p-6 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors group"
-      >
-        <div className="flex items-center">
-          <div className="p-3 rounded-lg bg-green-100 group-hover:bg-green-200 transition-colors">
-            <Clock className="h-8 w-8 text-green-600" />
-          </div>
-          <div className="ml-4">
-            <p className="font-medium text-gray-900">Mes demandes</p>
-            <p className="text-sm text-gray-500">Voir mes demandes</p>
-          </div>
-        </div>
-      </Link>
-    </div>
-  );
-
-  // Conseils pour Employé
-  const getEmployeeTips = () => (
-    <div className="bg-blue-50 rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
-        <AlertTriangle className="h-5 w-5 mr-2" />
-        Conseils pour vos demandes
-      </h3>
-      <div className="space-y-3 text-sm text-blue-800">
-        <div className="flex items-start">
-          <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-blue-600" />
-          <span>Décrivez précisément l'objet de votre demande</span>
-        </div>
-        <div className="flex items-start">
-          <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-blue-600" />
-          <span>Joignez tous les documents justificatifs</span>
-        </div>
-        <div className="flex items-start">
-          <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-blue-600" />
-          <span>Vérifiez les montants avant soumission</span>
-        </div>
-        <div className="flex items-start">
-          <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-blue-600" />
-          <span>Suivez l'état de vos demandes régulièrement</span>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {getRoleTitle(user?.role)}
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Bienvenue, {user?.first_name || user?.username}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Dernière mise à jour</p>
-            <p className="text-sm font-medium text-gray-900">
-              {new Date().toLocaleDateString("fr-FR", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-          </div>
+      <div className="rounded-3xl border border-gray-100 bg-gradient-to-r from-rose-50 to-white p-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between shadow-sm">
+        <div>
+          <p className="text-sm text-gray-500 uppercase">Tableau de bord</p>
+          <h1 className="text-3xl font-semibold text-gray-900 mt-1">
+            Bonjour {user?.first_name || user?.username},
+          </h1>
+          <p className="text-gray-500">
+            {user?.role === "mg"
+              ? "Pilotage des demandes arrivées à votre niveau."
+              : "Suivi complet de votre activité d’achat."}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-gray-400">Dernière mise à jour</p>
+          <p className="text-sm font-medium text-gray-700">
+            {new Date().toLocaleDateString("fr-FR", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div
-        className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${
-          user?.role === "employee" ? "5" : "4"
-        } gap-6`}
-      >
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.name}
-              className="bg-white rounded-lg shadow overflow-hidden"
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {statCards.map((stat) => (
+          <StatCard
+            key={stat.name}
+            icon={stat.icon}
+            name={stat.name}
+            value={stat.value}
+            description={stat.description}
+            accent={stat.color}
+          />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <SectionCard
+          title="Alertes critiques"
+          description={`${criticalAlerts.length} urgences · ${overdueAlerts.length} en retard`}
+          action={
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-600">
+              {criticalAlerts.length + overdueAlerts.length} en cours
+            </span>
+          }
+        >
+          {highlightedAlerts.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              Aucune alerte active pour le moment. Vous êtes à jour !
+            </p>
+          ) : (
+            highlightedAlerts.map((alert) => (
+              <AlertItem
+                key={alert.id}
+                alert={alert}
+                badge={{
+                  className:
+                    alert.status === "pending"
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-gray-100 text-gray-600",
+                  text: alert.status_display || alert.status,
+                }}
+              />
+            ))
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Budget approuvé"
+          description="Montant global validé sur la période courante"
+          action={
+            <span
+              className={`inline-flex items-center text-sm font-semibold ${
+                budgetTrend === "up" ? "text-emerald-600" : "text-rose-600"
+              }`}
             >
-              <div className="p-6">
-                <div className="flex items-center">
-                  <div
-                    className={`p-3 rounded-lg ${getColorClasses(stat.color)}`}
-                  >
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <div className="ml-4 flex-1">
-                    <p className="text-sm font-medium text-gray-600">
-                      {stat.name}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {stat.description}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Actions rapides selon le rôle */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Actions rapides
-        </h3>
-
-        {user?.role === "employee" ? (
-          getEmployeeActions()
-        ) : user?.role === "mg" ? (
-          getMGActions()
-        ) : user?.role === "accounting" ? (
-          getAccountingActions()
-        ) : user?.role === "director" ? (
-          getDirectorActions()
-        ) : (
-          <div className="text-center text-gray-500">
-            Aucune action disponible
-          </div>
-        )}
-      </div>
-
-      {/* Section spéciale pour employé */}
-      {user?.role === "employee" && (
-        <>
-          {/* Conseils */}
-          {getEmployeeTips()}
-
-          {/* Tableau de mes demandes récentes pour employé */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                État de mes demandes récentes
-              </h3>
+              {budgetTrend === "up" ? (
+                <TrendingUp className="h-4 w-4 mr-1" />
+              ) : (
+                <TrendingDown className="h-4 w-4 mr-1" />
+              )}
+              {Math.abs(budgetVariation).toFixed(1)}%
+            </span>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Budget validé</p>
+              <p className="text-3xl font-semibold text-gray-900">
+                {formatCurrency(currentBudget)}
+              </p>
+              <p className="text-xs text-gray-400">
+                vs {formatCurrency(previousBudget)} la période précédente
+              </p>
             </div>
 
-            {dashboardData?.recent_requests &&
-            dashboardData.recent_requests.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Description
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Montant
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Statut
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {dashboardData.recent_requests
-                      .slice(0, 5)
-                      .map((request) => {
-                        const statusBadge = getStatusBadge(request.status);
-                        const isUrgent = request.estimated_cost > 500000;
-
-                        return (
-                          <tr key={request.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex flex-col">
-                                <div className="flex items-center">
-                                  <p className="text-sm font-medium text-gray-900 truncate max-w-xs">
-                                    {request.item_description}
-                                  </p>
-                                  {isUrgent && (
-                                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                      <AlertTriangle className="h-3 w-3 mr-1" />
-                                      Urgent
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {new Intl.NumberFormat("fr-FR", {
-                                style: "currency",
-                                currency: "XOF",
-                              }).format(
-                                request.final_cost != null
-                                  ? request.final_cost
-                                  : request.estimated_cost || 0
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              <div className="flex items-center">
-                                <Calendar className="h-4 w-4 mr-1" />
-                                {new Date(
-                                  request.created_at
-                                ).toLocaleDateString("fr-FR")}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span
-                                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusBadge.class}`}
-                              >
-                                {statusBadge.text}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <Link
-                                to={`/requests/${request.id}`}
-                                className="text-blue-600 hover:text-blue-900 flex items-center"
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Détails
-                              </Link>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">
-                  Aucune demande
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Vous n'avez pas encore créé de demande.
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-2xl bg-gray-50 p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  Demandes approuvées
                 </p>
-                <div className="mt-6">
-                  <Link
-                    to="/requests/create"
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Créer ma première demande
-                  </Link>
-                </div>
+                <p className="text-xl font-semibold text-gray-900">
+                  {dashboardData?.approved_requests || 0}
+                </p>
               </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Tableau des demandes récentes - Pour tous les autres rôles */}
-      {user?.role !== "employee" &&
-        dashboardData?.recent_requests &&
-        dashboardData.recent_requests.length > 0 && (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Demandes récentes {user?.role === "mg" && "de mon niveau"}
-                {user?.role === "accounting" && "de mon niveau"}
-                {user?.role === "director" && "de mon niveau"}
-              </h3>
+              <div className="rounded-2xl bg-gray-50 p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  Montant moyen
+                </p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {formatCurrency(
+                    currentBudget /
+                      Math.max(1, dashboardData?.approved_requests || 1)
+                  )}
+                </p>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Demandeur
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Montant
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Statut
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+          </div>
+        </SectionCard>
+      </div>
+
+      <SectionCard
+        title="Actions rapides"
+        description="Accès direct aux tâches fréquentes"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {quickActions.map((action) => (
+            <Link
+              key={action.title}
+              to={action.to}
+              className="rounded-2xl border border-gray-100 p-4 hover:border-gray-200 hover:shadow transition-all flex items-center justify-between"
+            >
+              <div>
+                <p className="font-semibold text-gray-900">{action.title}</p>
+                <p className="text-sm text-gray-500">{action.description}</p>
+              </div>
+              <div
+                className={`h-9 w-9 rounded-full flex items-center justify-center ${action.accent}`}
+              >
+                <ArrowUpRight className="h-4 w-4" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      </SectionCard>
+
+      {user?.role === "employee" && dashboardData?.recent_requests && (
+        <SectionCard
+          title="Mes dernières demandes"
+          description="Suivi en temps réel des statuts"
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 uppercase">
+                  <th className="pb-2">Description</th>
+                  <th className="pb-2">Montant</th>
+                  <th className="pb-2">Statut</th>
+                  <th className="pb-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {dashboardData.recent_requests.map((req) => (
+                  <tr key={req.id} className="text-gray-700">
+                    <td className="py-3">
+                      <p className="font-medium">{req.item_description}</p>
+                      <p className="text-xs text-gray-500">
+                        Crée le{" "}
+                        {new Date(req.created_at).toLocaleDateString("fr-FR")}
+                      </p>
+                    </td>
+                    <td className="py-3 font-semibold">
+                      {formatCurrency(req.estimated_cost || 0)}
+                    </td>
+                    <td className="py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                        {req.status_display || req.status}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <Link
+                        to={`/requests/${req.id}`}
+                        className="text-blue-600 text-xs font-medium hover:text-blue-800 inline-flex items-center gap-1"
+                      >
+                        Consulter
+                        <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {dashboardData.recent_requests.slice(0, 5).map((request) => {
-                    const statusBadge = getStatusBadge(request.status);
-
-                    return (
-                      <tr key={request.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
-                            {request.item_description}
-                          </div>
-                          {request.item_description.length > 50 && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              {request.item_description.substring(50, 100)}...
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <User className="h-4 w-4 mr-2 text-gray-400" />
-                            <div className="text-sm text-gray-900">
-                              {request.user_name}
-                            </div>
-                          </div>
-                        </td>
-                        {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Intl.NumberFormat("fr-FR", {
-                            style: "currency",
-                            currency: "XOF",
-                          }).format(request.estimated_cost || 0)}
-                        </td> */}
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Intl.NumberFormat("fr-FR", {
-                            style: "currency",
-                            currency: "XOF",
-                          }).format(
-                            request.final_cost != null
-                              ? request.final_cost
-                              : request.estimated_cost || 0
-                          )}
-                        </td>
-
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {new Date(request.created_at).toLocaleDateString(
-                              "fr-FR"
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusBadge.class}`}
-                          >
-                            {statusBadge.text}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <Link
-                            to={`/requests/${request.id}`}
-                            className="text-blue-600 hover:text-blue-900 flex items-center"
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Détails
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+        </SectionCard>
+      )}
     </div>
   );
 };
 
 export default Dashboard;
-
-{
-  /* Debug info - Remove in production */
-}
-{
-  /* {process.env.NODE_ENV === "development" && dashboardData && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h4 className="font-medium text-yellow-800 mb-2">Debug Info:</h4>
-          <pre className="text-xs text-yellow-700 overflow-x-auto">
-            {JSON.stringify(
-              {
-                role: user?.role,
-                userId: user?.id,
-                stats: {
-                  total: dashboardData.total_requests,
-                  pending: dashboardData.pending_requests,
-                  inProgress: dashboardData.in_progress_requests,
-                  approved: dashboardData.approved_requests,
-                  rejected: dashboardData.rejected_requests,
-                  accountingTotal: dashboardData.accounting_total,
-                  accountingPending: dashboardData.accounting_pending,
-                  recentRequestsCount:
-                    dashboardData.recent_requests?.length || 0,
-                },
-              },
-              null,
-              2
-            )}
-          </pre>
-        </div>
-      )} */
-}

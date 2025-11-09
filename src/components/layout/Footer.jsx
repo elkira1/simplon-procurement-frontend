@@ -2,13 +2,24 @@ import React from "react";
 
 const Footer = () => {
   return (
-    <div className="text-center text-xs text-gray-500 mt-8 mb-4">
-      <p>
-        © {new Date().getFullYear()}{" "}
-        <span className="text-red-600">Simplon</span> Côte d'Ivoire – Gestion
-        Services
-      </p>
-    </div>
+    <footer className="px-6 py-4 border-t border-gray-200 bg-white">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between text-xs text-gray-500 gap-2">
+        <p>
+          © {new Date().getFullYear()}{" "}
+          <span className="text-red-600 font-semibold">Simplon Côte d'Ivoire</span>{" "}
+          · Gestion Services
+        </p>
+        <p>
+          Support :{" "}
+          <a
+            className="text-gray-700 hover:text-red-600 transition-colors"
+            href="mailto:support@simplon.ci"
+          >
+            support@simplon.ci
+          </a>
+        </p>
+      </div>
+    </footer>
   );
 };
 

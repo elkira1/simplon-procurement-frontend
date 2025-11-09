@@ -10,6 +10,12 @@ import { authAPI } from "../services/api"; // Assurez-vous que c'est le bon chem
 
 const AuthContext = createContext();
 
+const debugLog = (...args) => {
+  if (import.meta.env?.DEV) {
+    console.debug("[AuthContext]", ...args);
+  }
+};
+
 const authReducer = (state, action) => {
   switch (action.type) {
     case "LOGIN_START":
@@ -85,13 +91,28 @@ export const AuthProvider = ({ children }) => {
 
   const getCurrentUser = useCallback(async () => {
     try {
-      console.log("🔍 Vérification de l'authentification...");
+      debugLog("Vérification de l'authentification en cours");
       const response = await authAPI.getCurrentUser();
-      console.log("✅ Utilisateur authentifié:", response.data);
+      debugLog("Utilisateur authentifié", response.data?.id);
       dispatch({ type: "SET_USER", payload: response.data });
       return response.data;
     } catch (error) {
-      console.error("❌ Erreur getCurrentUser:", error);
+      console.error("Erreur getCurrentUser:", error);
+      const status = error?.response?.status;
+
+      // Tentative automatique de refresh en cas de 401
+      if (status === 401) {
+        debugLog("Tentative de refresh automatique après 401");
+        try {
+          await authAPI.refreshToken();
+          const retryResponse = await authAPI.getCurrentUser();
+          dispatch({ type: "SET_USER", payload: retryResponse.data });
+          return retryResponse.data;
+        } catch (refreshError) {
+          console.error("❌ Refresh automatique échoué:", refreshError);
+        }
+      }
+
       dispatch({ type: "AUTH_ERROR" });
       throw error;
     }
@@ -112,7 +133,7 @@ export const AuthProvider = ({ children }) => {
       try {
         await getCurrentUser();
       } catch (error) {
-        console.log("🔐 Utilisateur non connecté:", error.message);
+        debugLog("Utilisateur non connecté", error.message);
         dispatch({ type: "AUTH_ERROR" });
       } finally {
         if (mounted) {
@@ -133,30 +154,25 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: "CLEAR_ERROR" });
     
     try {
-      console.log("🔐 Tentative de connexion avec:", credentials);
+      debugLog("Tentative de connexion");
       const response = await authAPI.login(credentials);
-
-      console.log("=== RÉPONSE LOGIN ===");
-      console.log("Response:", response.data);
-      console.log("Cookies:", document.cookie);
-      console.log("===================");
+      debugLog("Réponse login reçue");
 
       // Vérifier la structure de la réponse
       if (response.data && response.data.success && response.data.user) {
-        console.log("✅ Login API réussi, mise à jour du state...");
-        
+        debugLog("Login réussi, mise à jour du contexte");
+
         // Utiliser les données utilisateur de la réponse login directement
         const userData = response.data.user;
         dispatch({ type: "LOGIN_SUCCESS", payload: userData });
-        
-        console.log("✅ State mis à jour avec:", userData);
+
         return { success: true, message: response.data.message };
       } else {
-        console.error("❌ Structure de réponse invalide:", response.data);
+        console.error("Structure de réponse invalide:", response.data);
         throw new Error("Structure de réponse invalide");
       }
     } catch (error) {
-      console.error("❌ Erreur de login complète:", error);
+      console.error("Erreur de login complète:", error);
       
       let errorMessage = "Erreur de connexion";
       
@@ -168,15 +184,15 @@ export const AuthProvider = ({ children }) => {
                       serverError.message || 
                       `Erreur ${error.response.status}`;
         
-        console.error("❌ Erreur serveur:", serverError);
+        console.error("Erreur serveur:", serverError);
       } else if (error.request) {
         // La requête a été faite mais aucune réponse n'a été reçue
         errorMessage = "Impossible de contacter le serveur. Vérifiez votre connexion.";
-        console.error("❌ Pas de réponse serveur:", error.request);
+        console.error("Pas de réponse serveur:", error.request);
       } else {
         // Une erreur s'est produite lors de la configuration de la requête
         errorMessage = error.message;
-        console.error("❌ Erreur configuration:", error.message);
+        console.error("Erreur configuration:", error.message);
       }
       
       dispatch({ type: "LOGIN_ERROR", payload: errorMessage });
@@ -185,18 +201,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = useCallback(async () => {
-    console.log("=== DÉBUT LOGOUT ===");
+    debugLog("Déconnexion en cours");
 
     try {
       await authAPI.logout();
-      console.log("✅ Logout API réussi");
     } catch (error) {
-      console.error("❌ Erreur lors de l'appel logout API:", error);
+      console.error("Erreur lors de l'appel logout API:", error);
     } finally {
       // Nettoyer quoi qu'il arrive
       dispatch({ type: "LOGOUT" });
-      console.log("✅ État local nettoyé");
-      console.log("=== FIN LOGOUT ===");
+      debugLog("État local nettoyé après logout");
     }
   }, []);
 

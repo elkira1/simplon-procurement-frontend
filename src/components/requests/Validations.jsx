@@ -6,19 +6,16 @@ import {
   CheckSquare,
   Clock,
   CheckCircle,
-  XCircle,
   Eye,
   Search,
-  Calendar,
   User,
-  Wallet2,
   AlertTriangle,
-  RefreshCw,
   ChevronUp,
   ChevronDown,
   Filter,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import { getRequestStatusConfig } from "../../utils/requestStatus";
 
 const Validations = () => {
   const { user } = useAuth();
@@ -44,68 +41,45 @@ const Validations = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  useEffect(() => {
-    fetchPendingRequests();
-  }, [filters.search, filters.urgency]);
+  const statusForRole = React.useMemo(() => {
+    if (user?.role === "mg") return "pending";
+    if (user?.role === "accounting") return "mg_approved";
+    if (user?.role === "director") return "accounting_reviewed";
+    return "";
+  }, [user?.role]);
 
-  const fetchPendingRequests = async () => {
+  const fetchPendingRequests = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await requestsAPI.getRequests();
+      const response = await requestsAPI.getRequests({
+        status: statusForRole,
+        search: filters.search,
+        urgency:
+          filters.urgency !== "all" && filters.urgency !== "urgent"
+            ? filters.urgency
+            : undefined,
+        pageSize: 50,
+        ordering: "created_at",
+      });
       let filteredRequests = response.data.results || response.data;
 
-      // Filtrer selon le rôle pour les validations
-      if (user?.role === "mg") {
+      if (filters.urgency === "urgent") {
         filteredRequests = filteredRequests.filter(
-          (req) => req.status === "pending"
+          (req) => req.urgency === "high" || req.urgency === "critical"
         );
-      } else if (user?.role === "accounting") {
-        filteredRequests = filteredRequests.filter(
-          (req) => req.status === "mg_approved" || req.status === "mg_validated"
-        );
-      } else if (user?.role === "director") {
-        filteredRequests = filteredRequests.filter(
-          (req) => req.status === "accounting_reviewed"
-        );
-      }
-
-      // Filtrage par recherche
-      if (filters.search) {
-        filteredRequests = filteredRequests.filter((req) => {
-          const searchLower = filters.search.toLowerCase();
-          return (
-            req.item_description?.toLowerCase().includes(searchLower) ||
-            req.user_name?.toLowerCase().includes(searchLower) ||
-            req.justification?.toLowerCase().includes(searchLower)
-          );
-        });
-      }
-
-      // Filtrage par urgence
-      if (filters.urgency !== "all") {
-        if (filters.urgency === "urgent") {
-          filteredRequests = filteredRequests.filter(
-            (req) => req.urgency === "high" || req.urgency === "critical"
-          );
-        } else if (filters.urgency === "critical") {
-          filteredRequests = filteredRequests.filter(
-            (req) => req.urgency === "critical"
-          );
-        } else {
-          filteredRequests = filteredRequests.filter(
-            (req) => req.urgency === filters.urgency
-          );
-        }
       }
 
       setRequests(filteredRequests);
     } catch (error) {
       toast.error("Erreur lors du chargement des demandes");
-      // console.error("Requests error:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters.search, filters.urgency, statusForRole]);
+
+  useEffect(() => {
+    fetchPendingRequests();
+  }, [fetchPendingRequests]);
 
   const getValidationTitle = () => {
     const titles = {
@@ -123,43 +97,6 @@ const Validations = () => {
       director: "Demandes en attente d'approbation finale",
     };
     return descriptions[user?.role] || "";
-  };
-
-  const getStatusConfig = (status) => {
-    const configs = {
-      pending: {
-        icon: Clock,
-        class: "bg-amber-100 text-amber-800",
-        text: "En attente",
-        dotClass: "bg-amber-400",
-      },
-      mg_approved: {
-        icon: RefreshCw,
-        class: "bg-blue-100 text-blue-800",
-        text: "Validée MG",
-        dotClass: "bg-blue-400",
-      },
-      mg_validated: {
-        icon: RefreshCw,
-        class: "bg-blue-100 text-blue-800",
-        text: "Validée MG",
-        dotClass: "bg-blue-400",
-      },
-      accounting_reviewed: {
-        icon: RefreshCw,
-        class: "bg-purple-100 text-purple-800",
-        text: "Revue Comptabilité",
-        dotClass: "bg-purple-400",
-      },
-    };
-    return (
-      configs[status] || {
-        icon: Clock,
-        class: "bg-gray-100 text-gray-800",
-        text: status,
-        dotClass: "bg-gray-400",
-      }
-    );
   };
 
   const getUrgencyConfig = (urgency) => {
@@ -284,7 +221,7 @@ const Validations = () => {
 
   // Composant pour l'affichage mobile en cartes
   const MobileValidationCard = ({ request }) => {
-    const statusConfig = getStatusConfig(request.status);
+    const statusConfig = getRequestStatusConfig(request.status);
     const urgencyConfig = getUrgencyConfig(request.urgency);
     const StatusIcon = statusConfig.icon;
     const UrgencyIcon = urgencyConfig.icon;
@@ -360,6 +297,22 @@ const Validations = () => {
                   month: "2-digit",
                   year: "numeric",
                 })}
+              </div>
+            </div>
+
+            {/* Statut */}
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Statut</div>
+              <div className="flex items-center space-x-2">
+                <div
+                  className={`w-2 h-2 rounded-full ${statusConfig.dotClassName}`}
+                ></div>
+                <span
+                  className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.className}`}
+                >
+                  <StatusIcon className="w-3 h-3 mr-1" />
+                  {statusConfig.label}
+                </span>
               </div>
             </div>
 
@@ -543,8 +496,9 @@ const Validations = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedRequests.map((request, index) => {
-                    const statusConfig = getStatusConfig(request.status);
+                    const statusConfig = getRequestStatusConfig(request.status);
                     const urgencyConfig = getUrgencyConfig(request.urgency);
+                    const StatusIcon = statusConfig.icon;
                     const UrgencyIcon = urgencyConfig.icon;
 
                     const daysSinceCreation = Math.floor(
@@ -647,6 +601,12 @@ const Validations = () => {
                         {/* Actions */}
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end space-x-2">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${statusConfig.className}`}
+                            >
+                              <StatusIcon className="h-4 w-4 mr-1" />
+                              {statusConfig.label}
+                            </span>
                             <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-800">
                               <Clock className="h-4 w-4 mr-1" />
                               Action requise

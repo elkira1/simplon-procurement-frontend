@@ -1,8 +1,28 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const envApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const isBrowser = typeof window !== "undefined";
+const defaultRelativeBase = "/api";
+
+let API_BASE_URL = envApiBaseUrl || defaultRelativeBase;
+
+if (!envApiBaseUrl && isBrowser) {
+  if (import.meta.env.DEV) {
+    API_BASE_URL = defaultRelativeBase;
+  } else {
+    API_BASE_URL = `${window.location.origin}/api`;
+  }
+}
 
 const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  withCredentials: true,
+});
+
+const refreshClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
@@ -60,16 +80,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await axios.post(
-          `${API_BASE_URL}/auth/refresh/`,
-          {},
-          {
-            withCredentials: true,
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const response = await refreshClient.post("/auth/refresh/", {});
 
         if (response.status === 200) {
           // console.log("Token refreshed successfully");
@@ -109,7 +120,32 @@ export const authAPI = {
 };
 
 export const requestsAPI = {
-  getRequests: (page = 1) => api.get(`/requests/?page=${page}`),
+  getRequests: (params = {}) => {
+    const queryParams = new URLSearchParams();
+
+    const mapping = {
+      page: params.page,
+      page_size: params.pageSize,
+      status: params.status,
+      urgency: params.urgency,
+      search: params.search,
+      date_from: params.dateFrom,
+      date_to: params.dateTo,
+      ordering: params.ordering,
+      min_amount: params.minAmount,
+      max_amount: params.maxAmount,
+    };
+
+    Object.entries(mapping).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        queryParams.append(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+
+    return api.get(`/requests/${queryString ? `?${queryString}` : ""}`);
+  },
   getRequest: (id) => api.get(`/requests/${id}/`),
   createRequest: (data) => api.post("/requests/", data),
 

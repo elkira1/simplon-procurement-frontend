@@ -17,6 +17,7 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
     includeCharts: true,
     includeTrends: true,
     includeDetails: true,
+    includeAlerts: true,
   });
 
   const [selectedMonths, setSelectedMonths] = useState([]);
@@ -408,6 +409,66 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
       applyAutoWidth(detailsSheet);
     }
 
+    if (exportConfig.includeAlerts) {
+      const alertsSheet = workbook.addWorksheet("Alertes critiques");
+      alertsSheet.addRow(["ALERTES CRITIQUES"]).font = { bold: true };
+      alertsSheet.addRow([]);
+
+      const header = alertsSheet.addRow([
+        "ID",
+        "Description",
+        "Demandeur",
+        "Statut",
+        "Urgence",
+        "Date de création",
+        "Jours en file",
+      ]);
+      header.eachCell((cell) => Object.assign(cell, commonHeaderStyle));
+
+      const now = new Date();
+      const criticalRequests = filteredRequests.filter(
+        (req) =>
+          req.urgency === "critical" && req.status !== "director_approved"
+      );
+      const overdueRequests = filteredRequests.filter((req) => {
+        if (req.status === "director_approved") return false;
+        const createdAt = new Date(req.created_at);
+        const delta = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+        return delta >= 7;
+      });
+
+      const alertsMap = new Map();
+      [...criticalRequests, ...overdueRequests].forEach((req) => {
+        if (!alertsMap.has(req.id)) {
+          alertsMap.set(req.id, req);
+        }
+      });
+
+      if (alertsMap.size === 0) {
+        alertsSheet.addRow(["Aucune alerte active"]).getCell(1).font = {
+          italic: true,
+        };
+      } else {
+        alertsMap.forEach((req) => {
+          const createdAt = new Date(req.created_at);
+          const daysWaiting = Math.floor(
+            (now - createdAt) / (1000 * 60 * 60 * 24)
+          );
+          alertsSheet.addRow([
+            req.id,
+            req.item_description || "Sans titre",
+            req.user_name || "Inconnu",
+            req.status_display || req.status,
+            req.urgency_display || req.urgency,
+            createdAt.toLocaleDateString("fr-FR"),
+            daysWaiting,
+          ]);
+        });
+      }
+
+      applyAutoWidth(alertsSheet);
+    }
+
     return workbook;
   };
 
@@ -523,6 +584,21 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
                   className="mr-2"
                 />
                 <span className="text-sm">Inclure les données détaillées</span>
+              </label>
+
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={exportConfig.includeAlerts}
+                  onChange={(e) =>
+                    setExportConfig((prev) => ({
+                      ...prev,
+                      includeAlerts: e.target.checked,
+                    }))
+                  }
+                  className="mr-2"
+                />
+                <span className="text-sm">Ajouter les alertes critiques</span>
               </label>
             </div>
           </div>
@@ -648,6 +724,9 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
                   )}
                 {exportConfig.includeDetails && (
                   <li>Liste détaillée de toutes les demandes</li>
+                )}
+                {exportConfig.includeAlerts && (
+                  <li>Alertes critiques (urgences / retards)</li>
                 )}
               </ul>
               <p className="mt-2">

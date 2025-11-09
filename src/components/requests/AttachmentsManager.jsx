@@ -107,6 +107,19 @@ const AttachmentsManager = ({
     return false;
   };
 
+  const openDownloadTab = (fileUrl) => {
+    if (!fileUrl) return;
+    try {
+      const downloadUrl = new URL(fileUrl);
+      if (!downloadUrl.searchParams.has("download")) {
+        downloadUrl.searchParams.set("download", "true");
+      }
+      window.open(downloadUrl.toString(), "_blank", "noopener,noreferrer");
+    } catch {
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
+    }
+  };
+
   // Fonction utilitaire pour vérifier si un objet est un File
   const isFileObject = (obj) => {
     return (
@@ -485,8 +498,8 @@ const AttachmentsManager = ({
                     </p>
 
                     <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
-                      {attachment.file_size_mb && (
-                        <span>{formatFileSize(attachment.file_size_mb)}</span>
+                      {attachment.file_size && (
+                        <span>{formatFileSizeBytes(attachment.file_size)}</span>
                       )}
                       {attachment.uploaded_by_name && (
                         <span>Par {attachment.uploaded_by_name}</span>
@@ -515,14 +528,14 @@ const AttachmentsManager = ({
                         <Eye className="w-4 h-4" />
                       </a>
 
-                      <a
-                        href={attachment.file_url}
-                        download
+                      <button
+                        type="button"
+                        onClick={() => openDownloadTab(attachment.file_url)}
                         className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
                         title="Télécharger"
                       >
                         <Download className="w-4 h-4" />
-                      </a>
+                      </button>
                     </>
                   )}
 

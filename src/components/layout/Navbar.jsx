@@ -94,6 +94,14 @@ const Navbar = () => {
                 alt="Logo Simplon CI"
                 className="h-10 w-auto"
               />
+              <div className="ml-3 hidden lg:flex flex-col leading-tight">
+                <span className="text-sm font-semibold tracking-wide uppercase text-gray-900">
+                  Simplon Services
+                </span>
+                <span className="text-xs text-gray-500">
+                  Pilotage des achats & budgets
+                </span>
+              </div>
             </div>
 
             {/* <div className="flex-shrink-0 flex items-center ml-4 md:ml-0">
