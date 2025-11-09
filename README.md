@@ -19,15 +19,16 @@ Elle s'appuie sur l'API Django (`back/`) et propose un workflow multi-rôles : E
 
 ## Variables d'environnement
 
-Créer un fichier `.env` à la racine du dossier `front/` :
+Copiez `.env.example` vers `.env` puis personnalisez les valeurs :
 
 ```bash
 VITE_API_BASE_URL=http://localhost:8000/api
+# Optionnel: fallback production si VITE_API_BASE_URL n'est pas défini (ex: Vercel)
+VITE_DEFAULT_PROD_API=https://simplonservices.onrender.com/api
 VITE_APP_NAME=Simplon Services
-VITE_BRAND_PRIMARY=#e63462
 ```
 
-> En production, la variable `VITE_API_BASE_URL` peut être omise : le client utilisera automatiquement `/api` sur le même domaine.
+Sur Vercel, définis `VITE_API_BASE_URL` (ou à défaut `VITE_DEFAULT_PROD_API`) dans l'onglet **Environment Variables** pour pointer vers l'API Render (`https://simplonservices.onrender.com/api`). Ça évite les soucis CORS et garde la configuration déclarative.
 
 ## Scripts
 

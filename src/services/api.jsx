@@ -1,15 +1,20 @@
 import axios from "axios";
 
 const envApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const fallbackProdBase =
+  import.meta.env.VITE_DEFAULT_PROD_API?.trim() ||
+  "https://simplonservices.onrender.com/api";
 const isBrowser = typeof window !== "undefined";
 const defaultRelativeBase = "/api";
 
 let API_BASE_URL = envApiBaseUrl || defaultRelativeBase;
 
-if (!envApiBaseUrl && isBrowser) {
+if (!envApiBaseUrl) {
   if (import.meta.env.DEV) {
     API_BASE_URL = defaultRelativeBase;
-  } else {
+  } else if (fallbackProdBase) {
+    API_BASE_URL = fallbackProdBase;
+  } else if (isBrowser) {
     API_BASE_URL = `${window.location.origin}/api`;
   }
 }
