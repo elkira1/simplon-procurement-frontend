@@ -30,13 +30,16 @@ const AddUserForm = ({ onClose, onUserAdded }) => {
   });
 
   const roles = [
-    { value: "employee", label: "Employé" },
+    { value: "employee", label: "Personnel" },
     { value: "mg", label: "Moyen Général" },
     { value: "accounting", label: "Comptabilité" },
     { value: "director", label: "Directeur" },
   ];
 
   const departments = [
+    "Service Développement",
+    "Service Communication",
+    "Service Pédagogique",
     "Administration",
     "Comptabilité",
     "Ressources Humaines",

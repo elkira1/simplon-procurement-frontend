@@ -74,7 +74,7 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
         deptName =
           departmentMapping[req.user.role] ||
           (req.user.role === "employee"
-            ? "Employés"
+            ? "Personnel"
             : req.user.role === "mg"
             ? "Moyens Généraux"
             : req.user.role === "accounting"
@@ -119,7 +119,7 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
           deptName =
             departmentMapping[req.user.role] ||
             (req.user.role === "employee"
-              ? "Employés"
+              ? "Personnel"
               : req.user.role === "mg"
               ? "Moyens Généraux"
               : req.user.role === "accounting"
@@ -310,10 +310,10 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
           } else if (req.user?.role) {
             deptName =
               departmentMapping[req.user.role] ||
-              (req.user.role === "employee"
-                ? "Employés"
-                : req.user.role === "mg"
-                ? "Moyens Généraux"
+          (req.user.role === "employee"
+            ? "Personnel"
+            : req.user.role === "mg"
+            ? "Moyens Généraux"
                 : req.user.role === "accounting"
                 ? "Comptabilité"
                 : req.user.role === "director"
@@ -379,7 +379,7 @@ const ExcelExportComponent = ({ statsData, onClose }) => {
           deptName =
             departmentMapping[req.user.role] ||
             (req.user.role === "employee"
-              ? "Employés"
+              ? "Personnel"
               : req.user.role === "mg"
               ? "Moyens Généraux"
               : req.user.role === "accounting"

@@ -12,7 +12,7 @@ const RequestTimeline = ({ request }) => {
         status: "completed",
         date: request.created_at,
         user: request.user_name,
-        role: "Employé",
+        role: "Personnel",
       },
       {
         id: "mg_validation",

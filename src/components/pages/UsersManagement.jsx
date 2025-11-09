@@ -45,13 +45,16 @@ const AddUserForm = ({ onClose, onUserAdded, currentUser }) => {
   });
 
   const roles = [
-    { value: "employee", label: "Employé" },
+    { value: "employee", label: "Personnel" },
     { value: "mg", label: "Moyens Généraux" },
     { value: "accounting", label: "Comptabilité" },
     { value: "director", label: "Direction" },
   ];
 
   const departments = [
+    "Service Développement",
+    "Service Communication",
+    "Service Pédagogique",
     "Administration",
     "Comptabilité",
     "Ressources Humaines",
@@ -366,13 +369,16 @@ const EditUserModal = ({ user, onClose, onUserUpdated, currentUser }) => {
   });
 
   const roles = [
-    { value: "employee", label: "Employé" },
+    { value: "employee", label: "Personnel" },
     { value: "mg", label: "Moyens Généraux" },
     { value: "accounting", label: "Comptabilité" },
     { value: "director", label: "Direction" },
   ];
 
   const departments = [
+    "Service Développement",
+    "Service Communication",
+    "Service Pédagogique",
     "Administration",
     "Comptabilité",
     "Ressources Humaines",
@@ -700,7 +706,7 @@ const UsersManagement = () => {
     const configs = {
       employee: {
         class: "bg-gray-100 text-gray-800",
-        text: "Employé",
+        text: "Personnel",
         dotClass: "bg-gray-400",
       },
       mg: {
@@ -1029,7 +1035,7 @@ const UsersManagement = () => {
                 className="pl-10 pr-8 py-2 w-full sm:w-auto border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent appearance-none bg-white"
               >
                 <option value="all">Tous les rôles</option>
-                <option value="employee">Employé</option>
+                <option value="employee">Personnel</option>
                 <option value="mg">Moyens Généraux</option>
                 <option value="accounting">Comptabilité</option>
                 <option value="director">Direction</option>

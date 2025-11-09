@@ -150,7 +150,7 @@ const Profile = () => {
   // Fonction pour obtenir le libellé du rôle
   const getRoleDisplay = (role) => {
     const roles = {
-      employee: "Employé",
+      employee: "Personnel",
       mg: "Moyens Généraux",
       accounting: "Comptabilité",
       director: "Direction",

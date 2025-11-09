@@ -26,7 +26,7 @@ const Navbar = () => {
 
   const getRoleDisplay = (role) => {
     const roles = {
-      employee: "Employé",
+      employee: "Personnel",
       mg: "Moyens Généraux",
       accounting: "Comptabilité",
       director: "Direction",

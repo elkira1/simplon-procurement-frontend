@@ -376,7 +376,7 @@ const Statistics = () => {
         deptName =
           departmentMapping[req.user.role] ||
           (req.user.role === "employee"
-            ? "Employés"
+            ? "Personnel"
             : req.user.role === "mg"
             ? "Moyens Généraux"
             : req.user.role === "accounting"
