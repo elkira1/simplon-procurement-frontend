@@ -159,11 +159,16 @@ export const AuthProvider = ({ children }) => {
       debugLog("Réponse login reçue");
 
       // Vérifier la structure de la réponse
-      if (response.data && response.data.success && response.data.user) {
+      if (response.data && response.data.success) {
         debugLog("Login réussi, mise à jour du contexte");
+        let userData = response.data.user;
 
-        // Utiliser les données utilisateur de la réponse login directement
-        const userData = response.data.user;
+        // Si le backend ne renvoie pas l'utilisateur, on le récupère
+        if (!userData) {
+          const currentUser = await authAPI.getCurrentUser();
+          userData = currentUser.data;
+        }
+
         dispatch({ type: "LOGIN_SUCCESS", payload: userData });
 
         return { success: true, message: response.data.message };
