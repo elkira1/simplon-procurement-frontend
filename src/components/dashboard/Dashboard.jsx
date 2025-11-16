@@ -519,183 +519,157 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <SectionCard
-        title="Vue pipeline"
-        description="Progression globale du flux (derniers 6 mois)"
-      >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {pipelineStatuses.map((stage) => (
-            <div
-              key={stage.key}
-              className="rounded-2xl border border-gray-100 p-4 shadow-sm bg-white/80 space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-gray-900">
-                  {stage.label}
-                </p>
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${stage.color}`}
-                >
-                  {stage.value} dossiers
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
+          <SectionCard
+            title="Vue pipeline"
+            description="Progression globale du flux (derniers 6 mois)"
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {pipelineStatuses.map((stage) => (
                 <div
-                  style={{ width: `${stage.percent}%` }}
-                  className={`h-full ${stage.bar} transition-all`}
-                ></div>
-              </div>
-              <p className="text-xs text-gray-500">
-                {stage.percent}% du flux positionné à cette étape
-              </p>
+                  key={stage.key}
+                  className="rounded-2xl border border-gray-100 p-4 shadow-sm bg-white/80 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {stage.label}
+                    </p>
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${stage.color}`}
+                    >
+                      {stage.value} dossiers
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      style={{ width: `${stage.percent}%` }}
+                      className={`h-full ${stage.bar} transition-all`}
+                    ></div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {stage.percent}% du flux positionné à cette étape
+                  </p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </SectionCard>
+          </SectionCard>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <SectionCard
-          title={
-            user?.role === "employee"
-              ? "Suivi de mes demandes"
-              : "À traiter en priorité"
-          }
-          description={
-            queueItems.length > 0
-              ? `${queueItems.length} demande${
-                  queueItems.length > 1 ? "s" : ""
-                } dans la file`
-              : "Aucune demande en attente"
-          }
-          action={
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600">
-              {queueInsights.oldest_waiting_days || 0} j max
-            </span>
-          }
-        >
-          {queueItems.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              Tout est traité pour le moment. Vous pouvez suivre les nouvelles
-              demandes depuis la liste générale.
-            </p>
-          ) : (
-            queueItems.map((item) => <QueueItem key={item.id} item={item} />)
-          )}
-        </SectionCard>
-        <SectionCard
-          title="Budget approuvé"
-          description="Montant global validé sur la période courante"
-          action={
-            <span
-              className={`inline-flex items-center text-sm font-semibold ${
-                budgetTrendDirection === "up"
-                  ? "text-emerald-600"
-                  : "text-rose-600"
-              }`}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <SectionCard
+              title={
+                user?.role === "employee"
+                  ? "Suivi de mes demandes"
+                  : "À traiter en priorité"
+              }
+              description={
+                queueItems.length > 0
+                  ? `${queueItems.length} demande${
+                      queueItems.length > 1 ? "s" : ""
+                    } dans la file`
+                  : "Aucune demande en attente"
+              }
+              action={
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600">
+                  {queueInsights.oldest_waiting_days || 0} j max
+                </span>
+              }
             >
-              {budgetTrendDirection === "up" ? (
-                <TrendingUp className="h-4 w-4 mr-1" />
+              {queueItems.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Tout est traité pour le moment. Vous pouvez suivre les nouvelles
+                  demandes depuis la liste générale.
+                </p>
               ) : (
-                <TrendingDown className="h-4 w-4 mr-1" />
+                queueItems.map((item) => <QueueItem key={item.id} item={item} />)
               )}
-              {parseFloat(budgetTrendValue).toFixed(1)}%
-            </span>
-          }
-        >
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Budget validé</p>
-              <p className="text-3xl font-semibold text-gray-900">
-                {formatCurrency(currentBudget)}
-              </p>
-              <p className="text-xs text-gray-400">
-                vs {formatCurrency(previousBudget)} la période précédente
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-2xl bg-gray-50 p-4">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">
-                  Demandes approuvées
-                </p>
-                <p className="text-xl font-semibold text-gray-900">
-                  {dashboardData?.approved_requests || 0}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-gray-50 p-4">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">
-                  Montant moyen
-                </p>
-                <p className="text-xl font-semibold text-gray-900">
-                  {formatCurrency(
-                    currentBudget /
-                      Math.max(1, dashboardData?.approved_requests || 1)
+            </SectionCard>
+            <SectionCard
+              title="Budget approuvé"
+              description="Montant global validé sur la période courante"
+              action={
+                <span
+                  className={`inline-flex items-center text-sm font-semibold ${
+                    budgetTrendDirection === "up"
+                      ? "text-emerald-600"
+                      : "text-rose-600"
+                  }`}
+                >
+                  {budgetTrendDirection === "up" ? (
+                    <TrendingUp className="h-4 w-4 mr-1" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4 mr-1" />
                   )}
-                </p>
+                  {parseFloat(budgetTrendValue).toFixed(1)}%
+                </span>
+              }
+            >
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Budget validé</p>
+                  <p className="text-3xl font-semibold text-gray-900">
+                    {formatCurrency(currentBudget)}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    vs {formatCurrency(previousBudget)} la période précédente
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-2xl bg-gray-50 p-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">
+                      Demandes approuvées
+                    </p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {dashboardData?.approved_requests || 0}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-gray-50 p-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">
+                      Montant moyen
+                    </p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {formatCurrency(
+                        currentBudget /
+                          Math.max(1, dashboardData?.approved_requests || 1)
+                      )}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            </SectionCard>
           </div>
-        </SectionCard>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <SectionCard
-          title="Mes dernières actions"
-          description="Historique récent (6 dernières opérations)"
-          action={
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
-              {recentActions.length} actions
-            </span>
-          }
-        >
-          {recentActions.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              Aucune action récente. Les validations et rejets apparaîtront ici.
-            </p>
-          ) : (
-            recentActions.map((action) => (
-              <RecentActionItem key={action.id} action={action} />
-            ))
-          )}
-        </SectionCard>
-
-        <SectionCard
-          title="Performance & file d'attente"
-          description="Vue synthétique de votre activité"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-2xl bg-gray-50 p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">
-                Demandes en file
-              </p>
-              <p className="text-xl font-semibold text-gray-900">
-                {performance.queue_size || 0}
-              </p>
-              <p className="text-xs text-gray-400 flex items-center gap-1">
-                <Timer className="h-3 w-3" />
-                +{performance.queue_oldest_waiting_days || 0} j max
-              </p>
+        </div>
+        <div className="space-y-6">
+          <SectionCard
+            title="Actions rapides"
+            description="Agissez en un clic"
+            action={
+              <Link
+                to="/requests"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600"
+              >
+                Voir toutes
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            }
+          >
+            <div className="space-y-3">
+              {quickActions.map((action) => (
+                <Link
+                  key={action.title}
+                  to={action.to}
+                  className={`block rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm font-semibold transition hover:border-blue-200 hover:shadow-sm ${action.accent}`}
+                >
+                  <p className="text-xs uppercase tracking-wider text-gray-400">
+                    {action.description}
+                  </p>
+                  <p className="text-lg text-gray-900">{action.title}</p>
+                </Link>
+              ))}
             </div>
-            <div className="rounded-2xl bg-gray-50 p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">
-                Temps moyen
-              </p>
-              <p className="text-xl font-semibold text-gray-900">
-                {performance.avg_handle_time_days || 0} j
-              </p>
-              <p className="text-xs text-gray-400">Entre réception et action</p>
-            </div>
-            <div className="rounded-2xl bg-gray-50 p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">
-                Actions 30 derniers jours
-              </p>
-              <p className="text-xl font-semibold text-gray-900">
-                {performance.actions_last_30_days || 0}
-              </p>
-              <p className="text-xs text-gray-400">Validations ou rejets</p>
-            </div>
-          </div>
-        </SectionCard>
+          </SectionCard>
+        </div>
       </div>
 
       {canSeeTeamActivity && flowSnapshot.length > 0 && (
